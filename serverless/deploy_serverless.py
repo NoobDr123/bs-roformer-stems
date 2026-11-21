@@ -24,19 +24,13 @@ body = {
     "gpu": {"pools": POOLS, "count": 1},
     "workers": {"min": 0, "max": WORKERS_MAX, "idleTimeout": IDLE},
     "scaling": {"type": "QUEUE_DELAY", "queueDelay": 4},
-    "container": {"diskInGb": int(os.environ.get("STEM_DISK_GB", "30"))},
+    "disk": int(os.environ.get("STEM_DISK_GB", "30")),
+    "timeout": int(os.environ.get("STEM_TIMEOUT_MS", "900000")),  # 15 min, covers a cold image pull
 }
-# container/disk field names vary slightly; retry without if rejected.
 
 print("creating endpoint", json.dumps({k: v for k, v in body.items()}, indent=2))
 r = rest("POST", "/v2/serverless", body)
 print(json.dumps(r, indent=2)[:8000])
-if r.get("http") in (400, 422) and "container" in body:
-    print("retrying without container field")
-    body.pop("container", None)
-    r = rest("POST", "/v2/serverless", body)
-    print(json.dumps(r, indent=2)[:8000])
-
 data = r.get("data") or {}
 eid = data.get("id") or (data.get("endpoint") or {}).get("id")
 if eid:
