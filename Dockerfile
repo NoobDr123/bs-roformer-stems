@@ -9,18 +9,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MODEL_FILENAME=model_bs_roformer_ep_317_sdr_12.9755.ckpt \
     MODEL_YAML=model_bs_roformer_ep_317_sdr_12.9755.yaml
 
+# build-essential is only needed to compile the diffq wheel, then removed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.11 python3.11-venv python3-pip python3.11-dev \
+        build-essential \
         ffmpeg libsndfile1 wget ca-certificates \
     && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
     && ln -sf /usr/bin/python3.11 /usr/local/bin/python3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# GPU torch first (cu124), then audio-separator + the Runpod SDK.
-RUN python3.11 -m pip install --no-cache-dir --upgrade pip \
- && python3.11 -m pip install --no-cache-dir \
-        torch torchaudio --index-url https://download.pytorch.org/whl/cu124 \
- && python3.11 -m pip install --no-cache-dir audio-separator runpod requests soundfile
+    && python3.11 -m pip install --no-cache-dir --upgrade pip \
+    && python3.11 -m pip install --no-cache-dir \
+        torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124 \
+    && printf 'torch==2.5.1\ntorchaudio==2.5.1\n' > /tmp/constraints.txt \
+    && python3.11 -m pip install --no-cache-dir -c /tmp/constraints.txt \
+        audio-separator runpod requests soundfile \
+    && apt-get purge -y --auto-remove build-essential python3.11-dev \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip /tmp/constraints.txt
 
 # Official Viperx 1297 BS-RoFormer vocals weights (SDR 12.9755) + yaml config.
 RUN mkdir -p /models \
