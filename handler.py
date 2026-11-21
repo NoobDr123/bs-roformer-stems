@@ -41,8 +41,27 @@ def gpu_name():
     return _GPU_NAME
 
 
+def _set_output(obj, output_dir, output_format):
+    """audio-separator keeps output_dir on both Separator and model_instance."""
+    if obj is None:
+        return
+    try:
+        obj.output_dir = output_dir
+    except Exception:
+        pass
+    try:
+        obj.output_format = output_format
+    except Exception:
+        pass
+
+
+def retarget_separator(sep, output_dir, output_format):
+    _set_output(sep, output_dir, output_format)
+    _set_output(getattr(sep, "model_instance", None), output_dir, output_format)
+
+
 def get_separator(output_dir, output_format):
-    """Load the baked model once; reuse it and just retarget the output dir."""
+    """Load the baked model once; reuse it and retarget the output dir."""
     global _SEPARATOR, _LOAD_S
     if _SEPARATOR is None:
         from audio_separator.separator import Separator
@@ -58,13 +77,7 @@ def get_separator(output_dir, output_format):
         _SEPARATOR = sep
         _LOAD_S = round(time.time() - t0, 2)
         log.info("model loaded in %ss on %s", _LOAD_S, gpu_name())
-    else:
-        _SEPARATOR.output_dir = output_dir
-        # some versions also expose output_format as a mutable attr
-        try:
-            _SEPARATOR.output_format = output_format
-        except Exception:
-            pass
+    retarget_separator(_SEPARATOR, output_dir, output_format)
     return _SEPARATOR
 
 
@@ -195,18 +208,43 @@ def handler(event):
         outputs = sep.separate(audio)
         t_infer = round(time.time() - t0, 2)
 
+        def list_audio_files(*dirs):
+            seen, files = set(), []
+            for d in dirs:
+                if not d or not os.path.isdir(d):
+                    continue
+                for f in sorted(os.listdir(d)):
+                    path = os.path.join(d, f)
+                    if not os.path.isfile(path):
+                        continue
+                    if os.path.splitext(f)[1].lower() not in {".flac", ".wav", ".mp3", ".m4a", ".ogg"}:
+                        continue
+                    if path in seen:
+                        continue
+                    seen.add(path)
+                    files.append(path)
+            return files
+
         def resolve_outputs(listed):
-            """audio-separator may return basenames, or drop extra dots in the
-            model name (sdr_12.9755 -> sdr_12). Prefer real files in out_dir."""
+            """audio-separator may return basenames, drop extra dots in the
+            model name, or write into the preload dir on model_instance."""
+            search_dirs = [
+                out_dir,
+                getattr(sep, "output_dir", None),
+                getattr(getattr(sep, "model_instance", None), "output_dir", None),
+            ]
             found = []
             for p in listed or []:
-                cands = [p, os.path.join(out_dir, p), os.path.join(out_dir, os.path.basename(p))]
+                cands = [p]
+                for d in search_dirs:
+                    if d:
+                        cands.append(os.path.join(d, p))
+                        cands.append(os.path.join(d, os.path.basename(p)))
                 hit = next((c for c in cands if c and os.path.isfile(c)), None)
                 if hit:
                     found.append(hit)
-            if len(found) < 2 and os.path.isdir(out_dir):
-                found = [os.path.join(out_dir, f) for f in sorted(os.listdir(out_dir))
-                         if os.path.isfile(os.path.join(out_dir, f))]
+            if len(found) < 2:
+                found = list_audio_files(*search_dirs)
             return found
 
         outputs = resolve_outputs(outputs)
