@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124 \
     && printf 'torch==2.5.1\ntorchaudio==2.5.1\n' > /tmp/constraints.txt \
     && python3.11 -m pip install --no-cache-dir -c /tmp/constraints.txt \
-        audio-separator runpod requests soundfile \
+        "audio-separator[gpu]" onnxruntime-gpu runpod requests soundfile \
     && apt-get purge -y --auto-remove build-essential python3.11-dev \
     && rm -rf /var/lib/apt/lists/* /root/.cache/pip /tmp/constraints.txt
 
