@@ -140,7 +140,13 @@ def write_b64(data, dest):
 
 
 def classify_stem(path):
+    """Match audio-separator names like song_(Vocals)_model.wav / _(Instrumental)_."""
     name = os.path.basename(path).lower()
+    stem = os.path.splitext(name)[0]
+    if stem in {"vocals", "vocal"} or "_(vocals)" in name or name.startswith("vocals.") or name.startswith("vocals_"):
+        return "vocals"
+    if stem in {"instrumental", "instruments"} or "_(instrumental)" in name or name.startswith("instrumental."):
+        return "instrumental"
     if "vocal" in name:
         return "vocals"
     if "instrument" in name or "no_vocal" in name or "karaoke" in name:
@@ -205,7 +211,12 @@ def handler(event):
         t_load_here = round(time.time() - t0, 2)
 
         t0 = time.time()
-        outputs = sep.separate(audio)
+        outputs = sep.separate(audio, custom_output_names={
+            "Vocals": "vocals",
+            "Instrumental": "instrumental",
+            "vocals": "vocals",
+            "instrumental": "instrumental",
+        })
         t_infer = round(time.time() - t0, 2)
 
         def list_audio_files(*dirs):
