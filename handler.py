@@ -195,10 +195,25 @@ def handler(event):
         outputs = sep.separate(audio)
         t_infer = round(time.time() - t0, 2)
 
+        def resolve_outputs(listed):
+            """audio-separator may return basenames, or drop extra dots in the
+            model name (sdr_12.9755 -> sdr_12). Prefer real files in out_dir."""
+            found = []
+            for p in listed or []:
+                cands = [p, os.path.join(out_dir, p), os.path.join(out_dir, os.path.basename(p))]
+                hit = next((c for c in cands if c and os.path.isfile(c)), None)
+                if hit:
+                    found.append(hit)
+            if len(found) < 2 and os.path.isdir(out_dir):
+                found = [os.path.join(out_dir, f) for f in sorted(os.listdir(out_dir))
+                         if os.path.isfile(os.path.join(out_dir, f))]
+            return found
+
+        outputs = resolve_outputs(outputs)
         stems = {}
         for p in outputs or []:
             kind = classify_stem(p)
-            if kind:
+            if kind and kind not in stems:
                 stems[kind] = p
         if "vocals" not in stems or "instrumental" not in stems:
             return {

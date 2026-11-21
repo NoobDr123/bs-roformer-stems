@@ -49,8 +49,14 @@ def run_job(payload, timeout=900, poll=1.0):
     t0 = time.time()
     last = None
     while True:
-        s = requests.get(f"{base()}/status/{jid}", headers=headers(), timeout=60).json()
-        last = s
+        try:
+            s = requests.get(f"{base()}/status/{jid}", headers=headers(), timeout=60).json()
+            last = s
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            if time.time() - t0 > timeout:
+                raise
+            time.sleep(min(5, poll * 2))
+            continue
         if s.get("status") in ("COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"):
             return s
         if time.time() - t0 > timeout:
